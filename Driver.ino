@@ -20,13 +20,13 @@ struct joint {
 };
 
 /* Joint 1 */
-joint motor1 = {PB8, PB9, PB6, PB7, 0, 0, 0, 0, 0.005, HIGH, 0};
+joint motor1 = {PB8, PB9, PB6, PB7, 0, 0, 0, 0, 0.0025, HIGH, 0};
 /* Joint 2 */
 joint motor2 = {PA8, PB15, PA9, PA10, 0, 0, 0, 0, 0.005, HIGH, 0};
 /* Joint 3 */
-joint motor3 = {PA2, PA3, PA1, PA0, 0, 0, 0, 0, 0.0121951219512195, HIGH, 0};
+joint motor3 = {PA2, PA3, PA1, PA0, 0, 0, 0, 0, (double)360/29520, LOW, 0};
 /* Joint 4 */
-joint motor4 = {PB0, PA5, PA6, PA7, 0, 0, 0, 0, 0.0121951219512195, HIGH, 0};
+joint motor4 = {PB0, PA5, PA6, PA7, 0, 0, 0, 0, (double)360/29520, LOW, 0};
 
 
 /* Initialize PID controllers */
@@ -38,6 +38,9 @@ PID myPID4(&motor4.current_angle, &motor4.pwmSpeed, &motor4.target_angle, Kp, Ki
 
 /* String to decode the input command */
 String readStr;
+
+/* DEBUG Variables */
+volatile long timestamp=0;
 
 /** 
  * Quadrature ENCODER Interrupt Service Routine
@@ -91,13 +94,13 @@ void setup()
 {
   // Attach pins to interrupt service routine
   attachInterrupt(digitalPinToInterrupt(motor1.encA), joint1ISR, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(motor1.encA), joint1ISR, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(motor1.encB), joint1ISR, CHANGE);
   attachInterrupt(digitalPinToInterrupt(motor2.encA), joint2ISR, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(motor2.encA), joint2ISR, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(motor2.encB), joint2ISR, CHANGE);
   attachInterrupt(digitalPinToInterrupt(motor3.encA), joint3ISR, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(motor3.encA), joint3ISR, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(motor3.encB), joint3ISR, CHANGE);
   attachInterrupt(digitalPinToInterrupt(motor4.encA), joint4ISR, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(motor4.encA), joint4ISR, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(motor4.encB), joint4ISR, CHANGE);
 
   // Setup all PWM Pins and Direction pins
   pinMode(motor1.servoPin, OUTPUT);
@@ -117,6 +120,8 @@ void setup()
   myPID2.SetMode(AUTOMATIC);
   myPID3.SetMode(AUTOMATIC);
   myPID4.SetMode(AUTOMATIC);
+  myPID1.SetOutputLimits(0, 20);
+  myPID4.SetOutputLimits(0, 40);
 }
 
 void PIDControl(joint* ob, PID* myPID){ 
@@ -132,9 +137,10 @@ void PIDControl(joint* ob, PID* myPID){
   {
     digitalWrite((*ob).dir, !(*ob).forwardDirection);
   }
-
   // If the target and current angles are not equal power the motor using PID controller
   (*myPID).Compute();
+  if((*ob).pwmSpeed==0)
+  Serial.println("Zero");
   analogWrite((*ob).servoPin, (*ob).pwmSpeed);
 }
 
@@ -165,15 +171,29 @@ void PWMControl(joint* ob){
 
 void loop()
 {
+  if(millis()-timestamp>1000)
+  {
+    timestamp = millis();
+    Serial.println("In Loop");
+    Serial.print("Current: ");
+    Serial.println(motor4.current_angle);
+    Serial.print("Target: ");
+    Serial.println(motor4.target_angle);
+    Serial.print("Output: ");
+    Serial.println(motor4.pwmSpeed);
+  } 
+  
   /* Check for input */ 
   while (Serial.available()) // TODO: Implement timeout to prevent getting stuck
   {
-    readStr = Serial.readString();
-    motor1.target_angle = 10;  // TODO: Fill up for all angles from input by seperation
-    motor2.target_angle = 10; 
-    motor3.target_angle = 10; 
-    motor4.target_angle = 10; 
+    readStr = Serial.readString(); 
+    motor4.target_angle = readStr.toInt();
+    // TODO: Fill up for all angles from input by seperation
   }
+  //motor1.target_angle = 10;
+  //motor2.target_angle = 10; 
+  //motor3.target_angle = 10; 
+  //motor4.target_angle = 10; 
 
   /* Update all current angle using the encoder count */
   motor1.current_angle = (double)motor1.enc_count * motor1.encoder_factor;
@@ -182,8 +202,8 @@ void loop()
   motor4.current_angle = (double)motor4.enc_count * motor4.encoder_factor;
 
   PIDControl(&motor1, &myPID1);
-  PIDControl(&motor2, &myPID2);
-  PIDControl(&motor3, &myPID3);
-  PIDControl(&motor4, &myPID4);
+  PWMControl(&motor2);
+  PWMControl(&motor3);
+  PWMControl(&motor4);
   
 }
