@@ -31,10 +31,9 @@ joint motor4 = {PB0, PA5, PA6, PA7, 0, 0, 0, 0, (double)360/29520, LOW, 0};
 
 /* Initialize PID controllers */
 double Kp=2, Ki=5, Kd=1;
-PID myPID1(&motor1.current_angle, &motor1.pwmSpeed, &motor1.target_angle, Kp, Ki, Kd, DIRECT);
-PID myPID2(&motor2.current_angle, &motor2.pwmSpeed, &motor2.target_angle, Kp, Ki, Kd, DIRECT);
-PID myPID3(&motor3.current_angle, &motor3.pwmSpeed, &motor3.target_angle, Kp, Ki, Kd, DIRECT);
-PID myPID4(&motor4.current_angle, &motor4.pwmSpeed, &motor4.target_angle, Kp, Ki, Kd, DIRECT);
+double m1Small, m1Large, m4Small, m4Large;
+PID myPID1(&m1Small, &motor1.pwmSpeed, &m1Large, Kp, Ki, Kd, DIRECT);
+PID myPID4(&m4Small, &motor4.pwmSpeed, &m4Large, Kp, Ki, Kd, DIRECT);
 
 /* String to decode the input command */
 String readStr;
@@ -117,11 +116,12 @@ void setup()
 
   // Turn on PID controllers
   myPID1.SetMode(AUTOMATIC);
-  myPID2.SetMode(AUTOMATIC);
-  myPID3.SetMode(AUTOMATIC);
   myPID4.SetMode(AUTOMATIC);
   myPID1.SetOutputLimits(0, 20);
-  myPID4.SetOutputLimits(0, 40);
+  myPID4.SetOutputLimits(0, 100);
+
+  // Intitailize PID variables
+  m1Small = m1Large = m4Small = m4Large = 0;
 }
 
 void PIDControl(joint* ob, PID* myPID){ 
@@ -131,7 +131,6 @@ void PIDControl(joint* ob, PID* myPID){
   if (diff < 0)
   {
     digitalWrite((*ob).dir, (*ob).forwardDirection);
-    diff = diff * -1;
   }
   else
   {
@@ -139,8 +138,6 @@ void PIDControl(joint* ob, PID* myPID){
   }
   // If the target and current angles are not equal power the motor using PID controller
   (*myPID).Compute();
-  if((*ob).pwmSpeed==0)
-  Serial.println("Zero");
   analogWrite((*ob).servoPin, (*ob).pwmSpeed);
 }
 
@@ -201,9 +198,31 @@ void loop()
   motor3.current_angle = (double)motor3.enc_count * motor3.encoder_factor;
   motor4.current_angle = (double)motor4.enc_count * motor4.encoder_factor;
 
+  if(motor1.current_angle > motor1.target_angle)
+  {
+    m1Small = motor1.target_angle;
+    m1Large = motor1.current_angle;
+  }
+  else
+  {
+    m1Large = motor1.target_angle;
+    m1Small = motor1.current_angle;
+  }
+  
+  if(motor4.current_angle > motor4.target_angle)
+  {
+    m4Small = motor4.target_angle;
+    m4Large = motor4.current_angle;
+  }
+  else
+  {
+    m4Large = motor4.target_angle;
+    m4Small = motor4.current_angle;
+  }
+
   PIDControl(&motor1, &myPID1);
   PWMControl(&motor2);
   PWMControl(&motor3);
-  PWMControl(&motor4);
+  PIDControl(&motor4, &myPID4);
   
 }
